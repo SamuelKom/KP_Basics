@@ -4,7 +4,9 @@ import crypto.dsa.DSAKeyPair;
 import crypto.dsa.DSASignature;
 import crypto.hash.HashUtil;
 import crypto.hmac.HmacUtil;
+import crypto.symmetric.SymmetricCryptoUtil;
 
+import javax.crypto.SecretKey;
 import java.io.*;
 import java.math.BigInteger;
 import java.net.*;
@@ -40,11 +42,12 @@ public class SecureClient {
 
         while (true) {
             System.out.println("\n--- Crypto Menu ---");
-            System.out.println("1. Send Encrypted Message");
-            System.out.println("2. Test DSA Signature");
-            System.out.println("3. Test HMAC");
-            System.out.println("4. Test Hash");
-            System.out.println("5. Exit");
+            System.out.println("1. Send RSA Encrypted Message");
+            System.out.println("2. Verify DSA Signature");
+            System.out.println("3. Verify HMAC");
+            System.out.println("4. Verify Hash");
+            System.out.println("5. Send AES Encrypted Message");
+            System.out.println("6. Exit");
             System.out.print("Choose an option: ");
 
             int choice = scanner.nextInt();
@@ -52,7 +55,7 @@ public class SecureClient {
 
             switch (choice) {
                 case 1:
-                    sendEncryptedMessage(scanner);
+                    sendEncryptedMessageRSA(scanner);
                     break;
                 case 2:
                     testDSASignature(scanner);
@@ -64,6 +67,9 @@ public class SecureClient {
                     testHash(scanner);
                     break;
                 case 5:
+                    sendEncryptedMessageAES(scanner);
+                    break;
+                case 6:
                     out.writeUTF("EXIT");
                     in.close();
                     out.close();
@@ -75,24 +81,24 @@ public class SecureClient {
         }
     }
 
-    private void sendEncryptedMessage(Scanner scanner) throws Exception {
+    private void sendEncryptedMessageRSA(Scanner scanner) throws Exception {
         System.out.print("Enter message to encrypt: ");
         String message = scanner.nextLine();
 
         // Encrypt message
-        byte[] encryptedMessage = rsaEncryption.encrypt(
-                message.getBytes(),
-                serverPublicKey,
-                serverModulus
-        );
+        byte[] encryptedMessage = rsaEncryption.encrypt(message.getBytes(), serverPublicKey, serverModulus);
+
+        System.out.println("Sending request to server with...");
+        System.out.println("Message: " + message);
+        System.out.println("RSA Encrypted: " + new String(encryptedMessage));
 
         // Send encryption request
-        out.writeUTF("ENCRYPT");
+        out.writeUTF("DECRYPT_RSA");
         out.writeUTF(new BigInteger(1, encryptedMessage).toString());
 
         // Receive decrypted message
         String decryptedMessage = in.readUTF();
-        System.out.println("Server decrypted message: " + decryptedMessage);
+        System.out.println("Message decrypted by server: " + decryptedMessage);
     }
 
     private void testDSASignature(Scanner scanner) throws Exception {
@@ -104,6 +110,11 @@ public class SecureClient {
                 message.getBytes(),
                 dsaKeyPair
         );
+
+        System.out.println("Sending request to server with...");
+        System.out.println("Message: " + message);
+        System.out.println("Public Key: " + dsaKeyPair.serializePublicKey());
+        System.out.println("Signature: " + signature.serialize());
 
         out.writeUTF("VERIFY_SIGNATURE");
         // Send message, public key, and signature
@@ -125,11 +136,18 @@ public class SecureClient {
 
         String hmacSha256 = new HmacUtil().generateHmac(message, secretKey, HmacUtil.HMAC_SHA256);
 
-        System.out.println("Sending message with hmac...");
+        System.out.println("Sending request to server with...");
+        System.out.println("Message: " + message);
+        System.out.println("HMAC: " + hmacSha256);
+        System.out.println("Secrete Key: " + secretKey);
+
+        // Encrypt secret
+        byte[] encryptedKey = rsaEncryption.encrypt(secretKey.getBytes(), serverPublicKey, serverModulus);
+
         out.writeUTF("VERIFY_HMAC");
         out.writeUTF(message);
         out.writeUTF(hmacSha256);
-        out.writeUTF(secretKey);
+        out.writeUTF(new BigInteger(1, encryptedKey).toString());
 
         boolean HmacVerified = in.readBoolean();
         System.out.println("HMAC Verification Result: " + HmacVerified);
@@ -168,17 +186,45 @@ public class SecureClient {
                 hash = HashUtil.hash(message, HashUtil.HashAlgorithm.MD5);
         }
 
-        System.out.println("Sending message with hash...");
-        System.out.println(message);
-        System.out.println(hash);
-        System.out.println(algorithm.getAlgorithmName());
+        System.out.println("Sending request to server with...");
+        System.out.println("Message: " + message);
+        System.out.println("Hash: " + hash);
+        System.out.println("Algorithm: " + algorithm.getAlgorithmName());
+
+        // Encrypt secret
+        byte[] encryptedAlgorithmType = rsaEncryption.encrypt(algorithm.getAlgorithmName().getBytes(), serverPublicKey, serverModulus);
+
         out.writeUTF("VERIFY_HASH");
         out.writeUTF(message);
         out.writeUTF(hash);
-        out.writeUTF(algorithm.getAlgorithmName());
+        out.writeUTF(new BigInteger(1, encryptedAlgorithmType).toString());
 
         boolean HashVerified = in.readBoolean();
         System.out.println("HashVerification Result: " + HashVerified);
+    }
+
+    private void sendEncryptedMessageAES(Scanner scanner) throws Exception {
+        System.out.print("Enter message to encrypt: ");
+        String message = scanner.nextLine();
+
+        SecretKey key = SymmetricCryptoUtil.generateKey();
+
+        // Encrypt message
+        byte[] encryptedMessage = SymmetricCryptoUtil.encrypt(message, key);
+        byte[] encryptedKey = rsaEncryption.encrypt(SymmetricCryptoUtil.keyToString(key).getBytes(), serverPublicKey, serverModulus);
+
+        System.out.println("Sending request to server with...");
+        System.out.println("Message: " + message);
+        System.out.println("AES Key: " + SymmetricCryptoUtil.keyToString(key));
+
+        // Send encryption request
+        out.writeUTF("DECRYPT_AES");
+        out.writeUTF(Base64.getEncoder().encodeToString(encryptedMessage));
+        out.writeUTF(new BigInteger(1, encryptedKey).toString());
+
+        // Receive decrypted message
+        String decryptedMessage = in.readUTF();
+        System.out.println("Server decrypted message: " + decryptedMessage);
     }
 
     public static void main(String[] args) {

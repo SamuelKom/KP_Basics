@@ -4,10 +4,14 @@ import crypto.dsa.DSAKeyPair;
 import crypto.dsa.DSASignature;
 import crypto.hash.HashUtil;
 import crypto.hmac.HmacUtil;
+import crypto.symmetric.SymmetricCryptoUtil;
 
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.math.BigInteger;
 import java.net.*;
+import java.util.Base64;
 
 public class SecureServer {
     private ServerSocket serverSocket;
@@ -43,11 +47,11 @@ public class SecureServer {
                 String operation = in.readUTF();
 
                 switch (operation) {
-                    case "ENCRYPT":
+                    case "DECRYPT_RSA":
                         String encryptedMessageStr = in.readUTF();
                         byte[] encryptedMessage = new BigInteger(encryptedMessageStr).toByteArray();
-                        byte[] decryptedMessage = rsaEncryption.decrypt(encryptedMessage);
-                        out.writeUTF(new String(decryptedMessage));
+                        String decryptedMessage = new String(rsaEncryption.decrypt(encryptedMessage));
+                        out.writeUTF(decryptedMessage);
                         break;
                     case "VERIFY_SIGNATURE":
                         // Receive message and public key
@@ -73,7 +77,10 @@ public class SecureServer {
                         String hmac = in.readUTF();
                         String secretKey = in.readUTF();
 
-                        boolean hmacValid = new HmacUtil().verifyHmac(hmacMessage, secretKey, hmac, HmacUtil.HMAC_SHA256);
+                        byte[] encryptedKey = new BigInteger(secretKey).toByteArray();
+                        String decryptedKey = new String(rsaEncryption.decrypt(encryptedKey));
+
+                        boolean hmacValid = new HmacUtil().verifyHmac(hmacMessage, decryptedKey, hmac, HmacUtil.HMAC_SHA256);
 
                         out.writeBoolean(hmacValid);
                         break;
@@ -82,15 +89,29 @@ public class SecureServer {
                         String hash = in.readUTF();
                         String  hashFunction = in.readUTF();
 
-                        System.out.println(hashMessage);
-                        System.out.println(hash);
-                        System.out.println(hashFunction);
+                        byte[] encryptedHashType = new BigInteger(hashFunction).toByteArray();
+                        String decryptedHashType = new String(rsaEncryption.decrypt(encryptedHashType));
 
-                        HashUtil.HashAlgorithm hashAlgorithm = HashUtil.HashAlgorithm.valueOf(hashFunction);
+                        HashUtil.HashAlgorithm hashAlgorithm = HashUtil.HashAlgorithm.valueOf(decryptedHashType);
 
                         boolean hashValid = HashUtil.verify(hashMessage, hash, hashAlgorithm);
 
                         out.writeBoolean(hashValid);
+                        break;
+                    case "DECRYPT_AES":
+                        String encrypted = in.readUTF();
+                        String keyAES = in.readUTF();
+
+                        byte[] encryptedKeyAES = new BigInteger(keyAES).toByteArray();
+                        String decryptedKeyAES = new String(rsaEncryption.decrypt(encryptedKeyAES));
+                        SecretKey aesKey = SymmetricCryptoUtil.stringToKey(decryptedKeyAES);
+
+                        System.out.println("AES Key: " + Base64.getEncoder().encodeToString(aesKey.getEncoded()));
+
+                        byte[] encryptedBytes = Base64.getDecoder().decode(encrypted);
+                        String decryptedAES = SymmetricCryptoUtil.decrypt(encryptedBytes, aesKey);
+
+                        out.writeUTF(decryptedAES);
                         break;
                     case "EXIT":
                         break label;

@@ -9,9 +9,9 @@ public class HashUtil {
     // Common hash algorithms
     public enum HashAlgorithm {
         MD5("MD5"),
-        SHA1("SHA-1"),
-        SHA256("SHA-256"),
-        SHA512("SHA-512");
+        SHA1("SHA1"),
+        SHA256("SHA256"),
+        SHA512("SHA512");
 
         private final String algorithmName;
 
@@ -79,8 +79,7 @@ public class HashUtil {
         StringBuilder sb = new StringBuilder("--- Available Hash Algorithms ---\n");
         int i = 1;
         for (HashAlgorithm algorithm : HashAlgorithm.values()) {
-            sb.append(i).append(". ").append(algorithm.name())
-                    .append(" (").append(algorithm.getAlgorithmName()).append(")\n");
+            sb.append(i).append(". ").append(algorithm.name()).append("\n");
             i++;
         }
         return sb.toString();

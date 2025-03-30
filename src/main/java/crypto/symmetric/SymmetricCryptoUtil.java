@@ -1,281 +1,119 @@
 package crypto.symmetric;
 
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Base64;
 
 public class SymmetricCryptoUtil {
 
-    // Common cipher algorithms
-    public static final String AES = "AES";
-    public static final String DES = "DES";
-    public static final String TRIPLE_DES = "DESede";
-    public static final String BLOWFISH = "Blowfish";
-
-    // Common cipher modes
-    public static final String ECB = "ECB";
-    public static final String CBC = "CBC";
-    public static final String CTR = "CTR";
-    public static final String GCM = "GCM";
-
-    // Common padding schemes
-    public static final String PKCS5_PADDING = "PKCS5Padding";
-    public static final String NO_PADDING = "NoPadding";
+    // Constants
+    private static final int AES_KEY_SIZE = 256;
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 128;
 
     /**
-     * Generates a secret key for the specified algorithm with the given key size
+     * Generates a secret key for AES encryption
      *
-     * @param algorithm The cipher algorithm (e.g., "AES")
-     * @param keySize The key size in bits (e.g., 128, 192, 256 for AES)
-     * @return The generated secret key
-     * @throws NoSuchAlgorithmException If the specified algorithm is not available
+     * @return A SecretKey for AES
+     * @throws NoSuchAlgorithmException If the algorithm is not available
      */
-    public SecretKey generateKey(String algorithm, int keySize) throws NoSuchAlgorithmException {
-        KeyGenerator keyGenerator = KeyGenerator.getInstance(algorithm);
-        keyGenerator.init(keySize);
+    public static SecretKey generateKey() throws NoSuchAlgorithmException {
+        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+        keyGenerator.init(AES_KEY_SIZE);
         return keyGenerator.generateKey();
     }
 
     /**
-     * Creates a secret key from the provided key bytes for the specified algorithm
+     * Encrypts a string message using AES-GCM
      *
-     * @param keyBytes The raw key bytes
-     * @param algorithm The cipher algorithm (e.g., "AES")
-     * @return The secret key
-     */
-    public SecretKey createKey(byte[] keyBytes, String algorithm) {
-        return new SecretKeySpec(keyBytes, algorithm);
-    }
-
-    /**
-     * Generates a random initialization vector (IV) of the specified size
-     *
-     * @param size The size of the IV in bytes
-     * @return The generated IV
-     */
-    public byte[] generateIV(int size) {
-        byte[] iv = new byte[size];
-        new SecureRandom().nextBytes(iv);
-        return iv;
-    }
-
-    /**
-     * Encrypts the provided plaintext using the specified parameters
-     *
-     * @param plaintext The text to encrypt
-     * @param key The secret key
-     * @param algorithm The cipher algorithm (e.g., "AES")
-     * @param mode The cipher mode (e.g., "CBC")
-     * @param padding The padding scheme (e.g., "PKCS5Padding")
-     * @return An EncryptionResult containing the ciphertext and IV
+     * @param message The plaintext message to encrypt
+     * @param key The secret key for encryption
+     * @return Byte array containing IV and ciphertext
      * @throws Exception If encryption fails
      */
-    public EncryptionResult encrypt(String plaintext, SecretKey key, String algorithm,
-                                    String mode, String padding) throws Exception {
+    public static byte[] encrypt(String message, SecretKey key) throws Exception {
+        byte[] plaintext = message.getBytes(StandardCharsets.UTF_8);
 
-        // Construct the transformation string
-        String transformation = String.format("%s/%s/%s", algorithm, mode, padding);
-        Cipher cipher = Cipher.getInstance(transformation);
+        // Generate a random IV (Initialization Vector)
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        SecureRandom random = new SecureRandom();
+        random.nextBytes(iv);
 
-        byte[] iv;
+        // Create GCM parameter specification
+        GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
 
-        // Initialize the cipher based on the mode
-        if (mode.equals(ECB)) {
-            // ECB mode doesn't use an IV
-            cipher.init(Cipher.ENCRYPT_MODE, key);
-            iv = null;
-        } else if (mode.equals(GCM)) {
-            // GCM mode uses a 12-byte IV
-            iv = generateIV(12);
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(128, iv);
-            cipher.init(Cipher.ENCRYPT_MODE, key, gcmSpec);
-        } else {
-            // Other modes (CBC, CTR) use an IV the size of the cipher block
-            iv = generateIV(cipher.getBlockSize());
-            IvParameterSpec ivSpec = new IvParameterSpec(iv);
-            cipher.init(Cipher.ENCRYPT_MODE, key, ivSpec);
-        }
+        // Initialize cipher for encryption
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key, gcmParameterSpec);
 
         // Encrypt the plaintext
-        byte[] plaintextBytes = plaintext.getBytes(StandardCharsets.UTF_8);
-        byte[] ciphertext = cipher.doFinal(plaintextBytes);
+        byte[] ciphertext = cipher.doFinal(plaintext);
 
-        return new EncryptionResult(ciphertext, iv);
+        System.out.println("IV: " + Base64.getEncoder().encodeToString(iv));
+        System.out.println("Ciphertext+Tag: " + Base64.getEncoder().encodeToString(ciphertext));
+
+        // Combine IV and ciphertext into a single byte array
+        ByteBuffer byteBuffer = ByteBuffer.allocate(iv.length + ciphertext.length);
+        byteBuffer.put(iv);
+        byteBuffer.put(ciphertext);
+
+        return byteBuffer.array();
     }
 
     /**
-     * Decrypts the provided ciphertext using the specified parameters
+     * Decrypts an encrypted message using AES-GCM
      *
-     * @param encryptionResult The EncryptionResult containing the ciphertext and IV
-     * @param key The secret key
-     * @param algorithm The cipher algorithm (e.g., "AES")
-     * @param mode The cipher mode (e.g., "CBC")
-     * @param padding The padding scheme (e.g., "PKCS5Padding")
-     * @return The decrypted plaintext
+     * @param encryptedData Byte array containing IV and ciphertext
+     * @param key The secret key for decryption
+     * @return The decrypted plaintext message
      * @throws Exception If decryption fails
      */
-    public String decrypt(EncryptionResult encryptionResult, SecretKey key, String algorithm,
-                          String mode, String padding) throws Exception {
+    public static String decrypt(byte[] encryptedData, SecretKey key) throws Exception {
+        // Extract IV and ciphertext
+        ByteBuffer byteBuffer = ByteBuffer.wrap(encryptedData);
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        byteBuffer.get(iv);
 
-        // Construct the transformation string
-        String transformation = String.format("%s/%s/%s", algorithm, mode, padding);
-        Cipher cipher = Cipher.getInstance(transformation);
+        byte[] ciphertext = new byte[byteBuffer.remaining()];
+        byteBuffer.get(ciphertext);
 
-        // Initialize the cipher based on the mode
-        if (mode.equals(ECB)) {
-            // ECB mode doesn't use an IV
-            cipher.init(Cipher.DECRYPT_MODE, key);
-        } else if (mode.equals(GCM)) {
-            // GCM mode uses a GCMParameterSpec
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(128, encryptionResult.getIv());
-            cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec);
-        } else {
-            // Other modes (CBC, CTR) use an IvParameterSpec
-            IvParameterSpec ivSpec = new IvParameterSpec(encryptionResult.getIv());
-            cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
-        }
+        // Create GCM parameter specification
+        GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+
+        // Initialize cipher for decryption
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, key, gcmParameterSpec);
+
+        System.out.println("IV: " + Base64.getEncoder().encodeToString(iv));
+        System.out.println("Ciphertext+Tag: " + Base64.getEncoder().encodeToString(ciphertext));
+
 
         // Decrypt the ciphertext
-        byte[] decryptedBytes = cipher.doFinal(encryptionResult.getCiphertext());
+        byte[] plaintext = cipher.doFinal(ciphertext);
 
-        return new String(decryptedBytes, StandardCharsets.UTF_8);
+        return new String(plaintext, StandardCharsets.UTF_8);
     }
 
     /**
-     * Encrypts the provided plaintext and encodes the result as a Base64 string
-     *
-     * @param plaintext The text to encrypt
-     * @param key The secret key
-     * @param algorithm The cipher algorithm (e.g., "AES")
-     * @param mode The cipher mode (e.g., "CBC")
-     * @param padding The padding scheme (e.g., "PKCS5Padding")
-     * @return The encrypted data encoded as a Base64 string
-     * @throws Exception If encryption fails
+     * Converts a SecretKey to Base64 string for storage or transmission
      */
-    public String encryptToBase64(String plaintext, SecretKey key, String algorithm,
-                                  String mode, String padding) throws Exception {
-
-        EncryptionResult result = encrypt(plaintext, key, algorithm, mode, padding);
-
-        // Combine IV and ciphertext for storage/transmission
-        byte[] combined;
-        if (result.getIv() != null) {
-            // Format: [IV length (4 bytes)][IV][ciphertext]
-            ByteBuffer buffer = ByteBuffer.allocate(4 + result.getIv().length + result.getCiphertext().length);
-            buffer.putInt(result.getIv().length);
-            buffer.put(result.getIv());
-            buffer.put(result.getCiphertext());
-            combined = buffer.array();
-        } else {
-            // ECB mode doesn't use an IV
-            combined = result.getCiphertext();
-        }
-
-        return Base64.getEncoder().encodeToString(combined);
+    public static String keyToString(SecretKey key) {
+        return Base64.getEncoder().encodeToString(key.getEncoded());
     }
 
     /**
-     * Decrypts the provided Base64-encoded ciphertext
-     *
-     * @param encodedText The Base64-encoded encrypted data
-     * @param key The secret key
-     * @param algorithm The cipher algorithm (e.g., "AES")
-     * @param mode The cipher mode (e.g., "CBC")
-     * @param padding The padding scheme (e.g., "PKCS5Padding")
-     * @return The decrypted plaintext
-     * @throws Exception If decryption fails
+     * Recreates a SecretKey from a Base64 string
      */
-    public String decryptFromBase64(String encodedText, SecretKey key, String algorithm,
-                                    String mode, String padding) throws Exception {
-
-        byte[] combined = Base64.getDecoder().decode(encodedText);
-
-        byte[] iv = null;
-        byte[] ciphertext;
-
-        if (!mode.equals(ECB)) {
-            // Extract IV and ciphertext
-            ByteBuffer buffer = ByteBuffer.wrap(combined);
-            int ivLength = buffer.getInt();
-            iv = new byte[ivLength];
-            buffer.get(iv);
-
-            ciphertext = new byte[combined.length - 4 - ivLength];
-            buffer.get(ciphertext);
-        } else {
-            // ECB mode doesn't use an IV
-            ciphertext = combined;
-        }
-
-        EncryptionResult result = new EncryptionResult(ciphertext, iv);
-        return decrypt(result, key, algorithm, mode, padding);
-    }
-
-    /**
-     * Lists all available cipher algorithms in the JVM
-     *
-     * @return An array of available cipher algorithm names
-     */
-    public String[] getAvailableCipherAlgorithms() {
-        return Security.getProviders()[0].getServices().stream()
-                .filter(s -> "Cipher".equals(s.getType()))
-                .map(Provider.Service::getAlgorithm)
-                .toArray(String[]::new);
-    }
-
-    /**
-     * Class to hold encryption results (ciphertext and IV)
-     */
-    public static class EncryptionResult {
-        private final byte[] ciphertext;
-        private final byte[] iv;
-
-        public EncryptionResult(byte[] ciphertext, byte[] iv) {
-            this.ciphertext = ciphertext;
-            this.iv = iv;
-        }
-
-        public byte[] getCiphertext() {
-            return ciphertext;
-        }
-
-        public byte[] getIv() {
-            return iv;
-        }
-    }
-
-    /**
-     * Demonstrates how to use the SymmetricCryptoUtil class
-     */
-    public static void main(String[] args) {
-        try {
-            // Create an instance of the utility
-            SymmetricCryptoUtil util = new SymmetricCryptoUtil();
-
-            // Generate a new AES key (256 bits)
-            SecretKey key = util.generateKey(AES, 256);
-
-            // Text to encrypt
-            String plaintext = "This is a test message for symmetric encryption.";
-
-            // Encrypt the text using AES in GCM mode with PKCS5 padding
-            String encrypted = util.encryptToBase64(plaintext, key, AES, GCM, PKCS5_PADDING);
-            System.out.println("Encrypted: " + encrypted);
-
-            // Decrypt the text
-            String decrypted = util.decryptFromBase64(encrypted, key, AES, GCM, PKCS5_PADDING);
-            System.out.println("Decrypted: " + decrypted);
-
-        } catch (Exception e) {
-            e.printStackTrace(System.out);
-        }
+    public static SecretKey stringToKey(String encodedKey) {
+        byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
+        return new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
     }
 }

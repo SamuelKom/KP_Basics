@@ -2,6 +2,8 @@ package secureapp;
 
 import crypto.dsa.DSAKeyPair;
 import crypto.dsa.DSASignature;
+import crypto.hash.HashUtil;
+import crypto.hmac.HmacUtil;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -65,6 +67,30 @@ public class SecureServer {
                         );
 
                         out.writeBoolean(isVerified);
+                        break;
+                    case "VERIFY_HMAC":
+                        String hmacMessage = in.readUTF();
+                        String hmac = in.readUTF();
+                        String secretKey = in.readUTF();
+
+                        boolean hmacValid = new HmacUtil().verifyHmac(hmacMessage, secretKey, hmac, HmacUtil.HMAC_SHA256);
+
+                        out.writeBoolean(hmacValid);
+                        break;
+                    case "VERIFY_HASH":
+                        String hashMessage = in.readUTF();
+                        String hash = in.readUTF();
+                        String  hashFunction = in.readUTF();
+
+                        System.out.println(hashMessage);
+                        System.out.println(hash);
+                        System.out.println(hashFunction);
+
+                        HashUtil.HashAlgorithm hashAlgorithm = HashUtil.HashAlgorithm.valueOf(hashFunction);
+
+                        boolean hashValid = HashUtil.verify(hashMessage, hash, hashAlgorithm);
+
+                        out.writeBoolean(hashValid);
                         break;
                     case "EXIT":
                         break label;

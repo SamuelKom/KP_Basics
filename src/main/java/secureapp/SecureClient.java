@@ -2,6 +2,8 @@ package secureapp;
 
 import crypto.dsa.DSAKeyPair;
 import crypto.dsa.DSASignature;
+import crypto.hash.HashUtil;
+import crypto.hmac.HmacUtil;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -37,10 +39,12 @@ public class SecureClient {
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
-            System.out.println("\n--- Secure Communication Menu ---");
+            System.out.println("\n--- Crypto Menu ---");
             System.out.println("1. Send Encrypted Message");
             System.out.println("2. Test DSA Signature");
-            System.out.println("3. Exit");
+            System.out.println("3. Test HMAC");
+            System.out.println("4. Test Hash");
+            System.out.println("5. Exit");
             System.out.print("Choose an option: ");
 
             int choice = scanner.nextInt();
@@ -54,6 +58,12 @@ public class SecureClient {
                     testDSASignature(scanner);
                     break;
                 case 3:
+                    testHMAC(scanner);
+                    break;
+                case 4:
+                    testHash(scanner);
+                    break;
+                case 5:
                     out.writeUTF("EXIT");
                     in.close();
                     out.close();
@@ -102,8 +112,73 @@ public class SecureClient {
         out.writeUTF(signature.serialize());
 
 
-        boolean isVerified = in.readBoolean();
-        System.out.println("Signature Verification Result: " + isVerified);
+        boolean SignatureVerified = in.readBoolean();
+        System.out.println("Signature Verification Result: " + SignatureVerified);
+    }
+
+    private void testHMAC(Scanner scanner) throws Exception {
+        System.out.print("Enter message to test hmac: ");
+        String message = scanner.nextLine();
+
+        System.out.print("Enter secret key: ");
+        String secretKey = scanner.nextLine();
+
+        String hmacSha256 = new HmacUtil().generateHmac(message, secretKey, HmacUtil.HMAC_SHA256);
+
+        System.out.println("Sending message with hmac...");
+        out.writeUTF("VERIFY_HMAC");
+        out.writeUTF(message);
+        out.writeUTF(hmacSha256);
+        out.writeUTF(secretKey);
+
+        boolean HmacVerified = in.readBoolean();
+        System.out.println("HMAC Verification Result: " + HmacVerified);
+    }
+
+    private void testHash(Scanner scanner) throws Exception {
+        System.out.print("Enter message to test hash: ");
+        String message = scanner.nextLine();
+
+        System.out.print(HashUtil.getAvailableAlgorithmsInfo());
+        System.out.print("Select a hash function: ");
+        int hashSelection = scanner.nextInt();
+        String hash = "";
+        HashUtil.HashAlgorithm algorithm;
+
+        switch (hashSelection) {
+            case 1:
+                algorithm = HashUtil.HashAlgorithm.MD5;
+                hash = HashUtil.hash(message, HashUtil.HashAlgorithm.MD5);
+                break;
+            case 2:
+                algorithm = HashUtil.HashAlgorithm.SHA1;
+                hash = HashUtil.hash(message, HashUtil.HashAlgorithm.SHA1);
+                break;
+            case 3:
+                algorithm = HashUtil.HashAlgorithm.SHA256;
+                hash = HashUtil.hash(message, HashUtil.HashAlgorithm.SHA256);
+                break;
+            case 4:
+                algorithm = HashUtil.HashAlgorithm.SHA512;
+                hash = HashUtil.hash(message, HashUtil.HashAlgorithm.SHA512);
+                break;
+            default:
+                System.out.println("Invalid option. Defaulting to MD5.");
+                algorithm = HashUtil.HashAlgorithm.MD5;
+                hash = HashUtil.hash(message, HashUtil.HashAlgorithm.MD5);
+        }
+
+        System.out.println("Sending message with hash...");
+        System.out.println(message);
+        System.out.println(hash);
+        System.out.println(algorithm.getAlgorithmName());
+        out.writeUTF("VERIFY_HASH");
+        out.writeUTF(message);
+        out.writeUTF(hash);
+        out.writeUTF(algorithm.getAlgorithmName());
+
+        boolean HashVerified = in.readBoolean();
+        System.out.println("HashVerification Result: " + HashVerified);
     }
 
     public static void main(String[] args) {

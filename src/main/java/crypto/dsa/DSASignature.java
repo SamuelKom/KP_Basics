@@ -6,10 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
 public class DSASignature {
-    private static final int KEY_LENGTH = 1024;
-    private static final int CERTAINTY = 100;
 
-    // Signature Class
     public static class Signature {
         public BigInteger r;
         public BigInteger s;

@@ -4,7 +4,6 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 
 public class DSAKeyPair {
-    private static final int KEY_LENGTH = 1024;
     private static final int CERTAINTY = 100;
 
     // Key Generation Class

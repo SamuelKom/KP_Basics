@@ -3,9 +3,9 @@ package crypto.rsa;
 import java.math.BigInteger;
 import java.util.*;
 
-// Utility Classes
+
 public class RSAUtils {
-    // RSA Encryption Utility
+
     public static class RSAEncryption {
         private BigInteger privateKey;
         private BigInteger publicKey;

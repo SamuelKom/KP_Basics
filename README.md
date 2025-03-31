@@ -5,6 +5,11 @@ This project shows different primitive cryptographic implementations which are m
 * Programming Language: Java
 * JDK: Oracle OpenJDK 23.0.2
 * Maven version 4.0.0
+* Maven dependencies:
+  1. Jupiter testing engine: https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-engine
+  2. Jupiter api: https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-api
+  3. Bouncy Castle provider: https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on
+  4. Bouncy Castle api: https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on
 
 ## Client Server Architecture and Usage
 The basic usage of most of the cryptographic functions is a client-server architecture.
@@ -30,6 +35,8 @@ The server responds by decrypting the message using its private key and sending 
 This implementation is not directly used by the client-server architecture, but it provides basic operations for elliptic curves over finite fields, including point addition and scalar multiplication.
 Scalar multiplication is performed using the double-and-add algorithm for computation of 𝑘𝑃 for a given point 𝑃 and scalar 𝑘.
 It also includes point validity checks to ensure correct calculations.
+
+As this class is not directly used, some tests have been written to verify functionality instead.
 
 ## DSA Signature Generation and Verification
 The DSA function implements the Digital Signature Algorithm for message authentication through the DSAKeyPair and DSASignature classes.
